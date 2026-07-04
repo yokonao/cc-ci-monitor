@@ -34,7 +34,7 @@ cc-ci-monitor <pr | url | branch> [--interval SECONDS]
 Add one line to your `CLAUDE.md`:
 
 ```
-After a PR or fix push, watch CI: Monitor({ command: "cc-ci-monitor <pr>", description: "PR <pr> CI" })
+After a PR or fix push, watch CI: Monitor({ command: "cc-ci-monitor <pr>", description: "PR <pr> CI", persistent: true })
 ```
 
 ## Events
