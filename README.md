@@ -31,12 +31,10 @@ cc-ci-monitor <pr | url | branch> [--interval SECONDS]
 
 ## Prompt
 
-Tell Claude Code to watch CI after it pushes. In your `CLAUDE.md`:
+Add one line to your `CLAUDE.md`:
 
 ```
-After creating a PR or pushing a fix, watch its CI with the Monitor tool:
-
-  Monitor({ command: "cc-ci-monitor <pr>", description: "PR <pr> CI" })
+After a PR or fix push, watch CI: Monitor({ command: "cc-ci-monitor <pr>", description: "PR <pr> CI" })
 ```
 
 ## Events
