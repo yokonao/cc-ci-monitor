@@ -53,3 +53,9 @@ After creating a PR or pushing a fix, watch its CI with the Monitor tool:
 
 After `MAX_FETCH_FAILURES` consecutive `gh` failures, the process exits non-zero
 with a message on stderr (not an event).
+
+## Tests
+
+```
+ruby test/monitor_test.rb
+```

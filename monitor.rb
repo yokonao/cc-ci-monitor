@@ -58,7 +58,10 @@ class Monitor
       rescue RuntimeError => e
         @fetch_failures += 1
         log "fetch failed (#{@fetch_failures}/#{MAX_FETCH_FAILURES}): #{e}"
-        return 1 if @fetch_failures >= MAX_FETCH_FAILURES
+        if @fetch_failures >= MAX_FETCH_FAILURES
+          log "giving up after #{MAX_FETCH_FAILURES} consecutive fetch failures"
+          return 1
+        end
         sleep @interval
         next
       end
