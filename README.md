@@ -46,5 +46,10 @@ After creating a PR or pushing a fix, watch its CI with the Monitor tool:
 | `check_failed`  | a check went red (once per failure) | `name`, `url` | —    |
 | `checks_passed` | all checks settled green            | `total`       | 0    |
 
+```json
+{"event":"check_failed","data":{"name":"test","url":"https://…"}}
+{"event":"checks_passed","data":{"total":3}}
+```
+
 After `MAX_FETCH_FAILURES` consecutive `gh` failures, the process exits non-zero
 with a message on stderr (not an event).
