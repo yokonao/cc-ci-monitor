@@ -2,7 +2,7 @@
 
 require "minitest/autorun"
 require "stringio"
-require_relative "../monitor"
+require_relative "monitor"
 
 class MonitorTest < Minitest::Test
   def check(name, bucket) = { "name" => name, "bucket" => bucket, "link" => "https://ci.test/#{name}" }

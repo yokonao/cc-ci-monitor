@@ -57,5 +57,5 @@ with a message on stderr (not an event).
 ## Tests
 
 ```
-ruby test/monitor_test.rb
+ruby monitor_test.rb
 ```
