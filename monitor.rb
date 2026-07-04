@@ -15,8 +15,6 @@ require "json"
 require "open3"
 require "set"
 
-MAX_FETCH_FAILURES = 5 # consecutive gh failures before we give up
-
 # Current checks as [{"name","bucket","link"}, ...], or [] when none reported yet.
 # gh exits non-zero while checks fail or pend but still prints JSON, so the signal
 # is parseable output, not exit status. Raises on a real fetch failure.
@@ -38,7 +36,10 @@ class Monitor
   GREEN = %w[pass skipping].freeze
   RED   = %w[fail cancel].freeze
 
-  def initialize(pr, interval:, fetch: method(:fetch_checks), out: $stdout, err: $stderr)
+  MAX_FETCH_FAILURES = 5 # consecutive gh failures before we give up
+  DEFAULT_INTERVAL = 30  # seconds between polls
+
+  def initialize(pr, interval: DEFAULT_INTERVAL, fetch: method(:fetch_checks), out: $stdout, err: $stderr)
     @pr = pr
     @interval = interval
     @fetch = fetch
@@ -114,8 +115,8 @@ def main
     exit 2
   end
   i = ARGV.index("--interval")
-  interval = i ? ARGV[i + 1].to_i : 15
-  interval = 15 unless interval.positive?
+  interval = ARGV[i + 1].to_i if i
+  interval = Monitor::DEFAULT_INTERVAL unless interval&.positive?
 
   exit Monitor.new(pr, interval: interval).run
 end

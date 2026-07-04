@@ -14,7 +14,7 @@ run.
 ruby monitor.rb <pr | url | branch> [--interval SECONDS]
 ```
 
-`--interval` defaults to 15 seconds.
+`--interval` defaults to 30 seconds.
 
 ## Events
 
