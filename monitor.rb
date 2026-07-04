@@ -13,6 +13,7 @@
 
 require "json"
 require "open3"
+require "optparse"
 require "set"
 
 # Current checks as [{"name","bucket","link"}, ...], or [] when none reported yet.
@@ -112,16 +113,27 @@ class Monitor
 end
 
 def main
-  pr = ARGV.reject { |a| a.start_with?("-") }.first
+  interval = Monitor::DEFAULT_INTERVAL
+  parser = OptionParser.new do |o|
+    o.banner = "usage: ruby monitor.rb <pr | url | branch> [--interval SECONDS]"
+    o.on("--interval SECONDS", Integer, "seconds between polls (default #{interval})") do |v|
+      raise OptionParser::InvalidArgument, v.to_s unless v.positive?
+
+      interval = v
+    end
+  end
+  parser.parse!(ARGV)
+
+  pr = ARGV.first
   unless pr
-    $stderr.puts "usage: ruby monitor.rb <pr | url | branch> [--interval SECONDS]"
+    $stderr.puts parser.banner
     exit 2
   end
-  i = ARGV.index("--interval")
-  interval = ARGV[i + 1].to_i if i
-  interval = Monitor::DEFAULT_INTERVAL unless interval&.positive?
 
   exit Monitor.new(pr, interval: interval).run
+rescue OptionParser::ParseError => e
+  $stderr.puts e.message
+  exit 2
 end
 
 main if __FILE__ == $PROGRAM_NAME
