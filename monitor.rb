@@ -17,13 +17,12 @@ require "set"
 
 MAX_FETCH_FAILURES = 5 # consecutive gh failures before we give up
 # @see https://cli.github.com/manual/gh_pr_checks
-# When the --json flag is used, it includes a bucket field, which categorizes the state field into pass, fail, pending, skipping, or cancel.
+# When the --json flag is used, bucket categorizes state into pass, fail, pending, skipping, or cancel.
 GREEN = %w[pass skipping].freeze
 RED   = %w[fail cancel].freeze
 
 def emit(event, **data)
-  line = { event: event, data: data }
-  $stdout.puts JSON.generate(line)
+  $stdout.puts JSON.generate({ event: event, data: data })
   $stdout.flush
 end
 
@@ -42,52 +41,78 @@ rescue JSON::ParserError => e
   raise "unparseable gh output: #{e.message}"
 end
 
-pr = ARGV.reject { |a| a.start_with?("-") }.first
-unless pr
-  log "usage: ruby monitor.rb <pr | url | branch> [--interval SECONDS]"
-  exit 2
-end
-i = ARGV.index("--interval")
-interval = i ? ARGV[i + 1].to_i : 15
-interval = 15 unless interval.positive?
-
-seen_failed = Set.new # so each failure is emitted once
-fetch_failures = 0
-
-loop do
-  begin
-    checks = fetch_checks(pr)
-    fetch_failures = 0
-  rescue RuntimeError => e
-    fetch_failures += 1
-    log "fetch failed (#{fetch_failures}/#{MAX_FETCH_FAILURES}): #{e}"
-    abort "giving up after #{MAX_FETCH_FAILURES} consecutive fetch failures" if fetch_failures >= MAX_FETCH_FAILURES
-    sleep interval
-    next
+# The watch loop. `fetch` is the only side-channel to the outside world, so a test
+# can hand in a scripted stub and drive the whole loop end-to-end.
+class Monitor
+  def initialize(pr, interval:, fetch: method(:fetch_checks))
+    @pr = pr
+    @interval = interval
+    @fetch = fetch
+    @seen_failed = Set.new # so each failure is emitted once
+    @fetch_failures = 0
   end
 
-  if checks.empty?
-    log "no checks reported yet; waiting…"
-    sleep interval
-    next
-  end
+  # Runs until all green (returns 0) or too many consecutive fetch failures (1).
+  def run
+    loop do
+      begin
+        checks = @fetch.call(@pr)
+        @fetch_failures = 0
+      rescue RuntimeError => e
+        @fetch_failures += 1
+        log "fetch failed (#{@fetch_failures}/#{MAX_FETCH_FAILURES}): #{e}"
+        return 1 if @fetch_failures >= MAX_FETCH_FAILURES
+        sleep @interval
+        next
+      end
 
-  # Announce each check the moment it turns red; forget it again if it leaves the
-  # red state (a re-run went pending/green) so a later failure re-reports.
-  checks.each do |c|
-    if RED.include?(c["bucket"])
-      emit "check_failed", name: c["name"], url: c["link"] if seen_failed.add?(c["name"])
-    else
-      seen_failed.delete(c["name"])
+      if checks.empty?
+        log "no checks reported yet; waiting…"
+        sleep @interval
+        next
+      end
+
+      events, done = tick(checks)
+      events.each { |event, data| emit(event, **data) }
+      return 0 if done
+
+      sleep @interval
     end
   end
 
-  # All green is the one terminal. Pending or red: keep watching (a fix push
-  # restarts the run; check_failed already named each red).
-  if checks.all? { |c| GREEN.include?(c["bucket"]) }
-    emit "checks_passed", total: checks.size
-    exit 0
-  end
+  # checks -> [events, done?]   where events is [[:check_failed, {...}], ...]
+  def tick(checks)
+    events = []
 
-  sleep interval
+    # Announce each check the moment it turns red; forget it again if it leaves
+    # the red state (a re-run went pending/green) so a later failure re-reports.
+    checks.each do |c|
+      if RED.include?(c["bucket"])
+        events << [:check_failed, { name: c["name"], url: c["link"] }] if @seen_failed.add?(c["name"])
+      else
+        @seen_failed.delete(c["name"])
+      end
+    end
+
+    # All green is the one terminal. Pending or red: keep watching.
+    done = !checks.empty? && checks.all? { |c| GREEN.include?(c["bucket"]) }
+    events << [:checks_passed, { total: checks.size }] if done
+
+    [events, done]
+  end
 end
+
+def main
+  pr = ARGV.reject { |a| a.start_with?("-") }.first
+  unless pr
+    log "usage: ruby monitor.rb <pr | url | branch> [--interval SECONDS]"
+    exit 2
+  end
+  i = ARGV.index("--interval")
+  interval = i ? ARGV[i + 1].to_i : 15
+  interval = 15 unless interval.positive?
+
+  exit Monitor.new(pr, interval: interval).run
+end
+
+main if __FILE__ == $PROGRAM_NAME
