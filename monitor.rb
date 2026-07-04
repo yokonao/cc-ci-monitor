@@ -16,17 +16,6 @@ require "open3"
 require "set"
 
 MAX_FETCH_FAILURES = 5 # consecutive gh failures before we give up
-# @see https://cli.github.com/manual/gh_pr_checks
-# When the --json flag is used, bucket categorizes state into pass, fail, pending, skipping, or cancel.
-GREEN = %w[pass skipping].freeze
-RED   = %w[fail cancel].freeze
-
-def emit(event, **data)
-  $stdout.puts JSON.generate({ event: event, data: data })
-  $stdout.flush
-end
-
-def log(msg) = $stderr.puts(msg)
 
 # Current checks as [{"name","bucket","link"}, ...], or [] when none reported yet.
 # gh exits non-zero while checks fail or pend but still prints JSON, so the signal
@@ -44,10 +33,17 @@ end
 # The watch loop. `fetch` is the only side-channel to the outside world, so a test
 # can hand in a scripted stub and drive the whole loop end-to-end.
 class Monitor
-  def initialize(pr, interval:, fetch: method(:fetch_checks))
+  # @see https://cli.github.com/manual/gh_pr_checks
+  # When the --json flag is used, bucket categorizes state into pass, fail, pending, skipping, or cancel.
+  GREEN = %w[pass skipping].freeze
+  RED   = %w[fail cancel].freeze
+
+  def initialize(pr, interval:, fetch: method(:fetch_checks), out: $stdout, err: $stderr)
     @pr = pr
     @interval = interval
     @fetch = fetch
+    @out = out
+    @err = err
     @seen_failed = Set.new # so each failure is emitted once
     @fetch_failures = 0
   end
@@ -100,12 +96,21 @@ class Monitor
 
     [events, done]
   end
+
+  private
+
+  def emit(event, **data)
+    @out.puts JSON.generate({ event: event, data: data })
+    @out.flush
+  end
+
+  def log(msg) = @err.puts(msg)
 end
 
 def main
   pr = ARGV.reject { |a| a.start_with?("-") }.first
   unless pr
-    log "usage: ruby monitor.rb <pr | url | branch> [--interval SECONDS]"
+    $stderr.puts "usage: ruby monitor.rb <pr | url | branch> [--interval SECONDS]"
     exit 2
   end
   i = ARGV.index("--interval")
