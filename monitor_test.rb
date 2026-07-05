@@ -5,7 +5,7 @@ require "stringio"
 require_relative "monitor"
 
 class MonitorTest < Minitest::Test
-  def check(name, bucket) = { "name" => name, "bucket" => bucket, "link" => "https://ci.test/#{name}" }
+  def check(name, bucket, run: 1) = { "name" => name, "bucket" => bucket, "link" => "https://ci.test/#{name}/#{run}" }
 
   # Drive `run` with a scripted gh: each response is a checks array, or a String
   # to raise as a fetch failure. Returns [exit_code, emitted_events, stderr_log].
@@ -33,7 +33,7 @@ class MonitorTest < Minitest::Test
     code, events = drive([check("test", "fail")], [check("test", "pass")])
     assert_equal 0, code
     assert_equal "check_failed", events[0]["event"]
-    assert_equal({ "name" => "test", "url" => "https://ci.test/test" }, events[0]["data"])
+    assert_equal({ "name" => "test", "url" => "https://ci.test/test/1" }, events[0]["data"])
     assert_equal "checks_passed", events[1]["event"]
   end
 
@@ -43,12 +43,13 @@ class MonitorTest < Minitest::Test
     assert_equal %w[check_failed checks_passed], events.map { |e| e["event"] }
   end
 
-  def test_failure_re_reports_after_leaving_red
+  # A fix push starts a new run (new link); it must re-report even when the
+  # intervening pending/green state fell between polls and was never observed.
+  def test_new_run_re_reports_failure
     code, events = drive(
-      [check("test", "fail")],
-      [check("test", "pending")],
-      [check("test", "fail")],
-      [check("test", "pass")]
+      [check("test", "fail", run: 1)],
+      [check("test", "fail", run: 2)],
+      [check("test", "pass", run: 2)]
     )
     assert_equal 0, code
     assert_equal %w[check_failed check_failed checks_passed], events.map { |e| e["event"] }

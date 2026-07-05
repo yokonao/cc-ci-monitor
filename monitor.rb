@@ -85,14 +85,13 @@ class Monitor
   def tick(checks)
     events = []
 
-    # Announce each check the moment it turns red; forget it again if it leaves
-    # the red state (a re-run went pending/green) so a later failure re-reports.
+    # Announce each check the moment it turns red, keyed by [name, run URL] so a
+    # fresh failing run re-reports even when the intervening pending/green state
+    # fell between polls and was never observed.
     checks.each do |c|
-      if RED.include?(c["bucket"])
-        events << [:check_failed, { name: c["name"], url: c["link"] }] if @seen_failed.add?(c["name"])
-      else
-        @seen_failed.delete(c["name"])
-      end
+      next unless RED.include?(c["bucket"])
+
+      events << [:check_failed, { name: c["name"], url: c["link"] }] if @seen_failed.add?([c["name"], c["link"]])
     end
 
     # All green is the one terminal. Pending or red: keep watching.
